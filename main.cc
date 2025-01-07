@@ -6,6 +6,7 @@
 #include <fstream>
 #include <random>
 #include <set>
+#include <list>
 
 #include <filesystem>
 
@@ -221,44 +222,16 @@ private:
 
 static std::mt19937 gen(42);
 
-template <typename T>
-std::set<T>::iterator get_random_iterator(const std::set<T>& set) {
-    if (set.empty()) {
-        return set.end();
-    }
-
-    std::uniform_int_distribution<> dist(0, set.size() - 1);
-
-    auto it = set.begin();
-    std::advance(it, dist(gen));
-    return it;
-}
-
 bool rand_bool(double p = 0.5) {
     return std::bernoulli_distribution(p)(gen);
 }
-
 
 int main() {
     std::vector<std::string> words = load_words("/Users/mattlangford/Downloads/google-10000-english-usa.txt");
     std::cout << "Loaded " << words.size() << " words\n";
     
-    /*
-        "noun",
-        "house",
-        "owner",
-        "macro",
-        "eyes",
-        "home",
-        "noway",
-        "ounce",
-        "users",
-        "nero"
-    */
-
     const std::set<std::string> word_set{words.begin(), words.end()};
 
-std::cerr << "1\n";
     Lookup lookup(words);
 
     Board b;
@@ -268,47 +241,67 @@ std::cerr << "1\n";
     std::cout << b.to_string() << "\n";
 
     auto index_sets = b.index_sets();
+    const size_t total_words = index_sets.rows.size() + index_sets.cols.size();
+
+    std::vector<std::vector<size_t>> to_visit;
+    for (auto& e : index_sets.rows) to_visit.push_back(std::move(e));
+    for (auto& e : index_sets.cols) to_visit.push_back(std::move(e));
+    std::shuffle(to_visit.begin(), to_visit.end(), gen);
 
     struct Dfs {
-        bool row;
-        std::set<std::vector<size_t>>::iterator it;
         Board board;
+        std::vector<std::vector<size_t>> to_visit;
+        std::set<size_t> used;
     };
 
+    std::uniform_int_distribution<> start_index_dist(0, 1000);
+
     std::stack<Dfs> dfs;
-    dfs.push(Dfs{false, index_sets.cols.begin(), b});
+    dfs.push(Dfs{b, std::move(to_visit), {}});
     while (!dfs.empty()) {
-        auto [r, it, board] = std::move(dfs.top());
-        std::cout << "\n\n" << (r ? "ROW" : "COL") << ": ";
-        for (const auto i : *it) std::cout << i << " ";
-        std::cout << "\n";
-        std::cout << board.to_string() << "\n";
+        auto [board, to_visit, used] = std::move(dfs.top());
         dfs.pop();
 
-        auto next = [&](Board new_board) {
-            bool rows = rand_bool();
-            auto next = get_random_iterator(rows ? index_sets.rows : index_sets.cols);
-            dfs.push({rows, next, std::move(new_board)});
-        };
+        // if (!to_visit.empty()) {
+        //     for (const auto i : to_visit.back()) std::cout << i << " ";
+        // }
 
-        if (it->size() == 1) {
-            next(std::move(board));
+        // std::cout << "\n";
+        // std::cout << board.to_string() << "\n";
+        // std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        if (to_visit.empty()) {
+            std::cout << "DONE\n";
+            std::cout << board.to_string() << "\n";
             continue;
         }
 
-        const auto positions = board.get_characters_at(*it);
-        constexpr size_t MAX_ATTEMPTS = 10;
-        size_t attempts = 0;
-        for (size_t index : lookup.words_with_characters_at(positions, it->size())) {
-            const std::string& candidate = words.at(index);
-            Board new_board = board;
-            std::cout << "candidate " << candidate << "\n";
-            new_board.fill(*it, candidate);
-            next(std::move(new_board));
+        const std::vector<size_t>& indicies = to_visit.back();
 
-            if (attempts++ > MAX_ATTEMPTS) {
-                break;
+        if (indicies.size() == 1) {
+            dfs.push({std::move(board), std::move(to_visit), std::move(used)});
+            continue;
+        }
+
+        const auto positions = board.get_characters_at(indicies);
+        const auto candidates = lookup.words_with_characters_at(positions, indicies.size());
+        size_t start_index = start_index_dist(gen);
+        for (size_t i = 0; i < candidates.size(); ++i) {
+            const size_t index = candidates[(start_index + i) % candidates.size()];
+            if (used.contains(index)) {
+                continue;
             }
+
+            auto next_to_visit = to_visit;
+            next_to_visit.pop_back();
+
+            const std::string& candidate = words.at(index);
+            auto new_used = used;
+            new_used.insert(index);
+
+            Board new_board = board;
+            new_board.fill(indicies, candidate);
+            dfs.push({std::move(new_board), std::move(next_to_visit), std::move(new_used)});
         }
     }
 
