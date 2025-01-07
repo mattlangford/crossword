@@ -1,35 +1,35 @@
 {
   "version": "http://ipuz.org/v2",
-  "kind": ["http://ipuz.org/crossword#1"],
+  "kind": "http://ipuz.org/crofileword",
   "dimensions": {"width": 5, "height": 5},
   "puzzle": [
-    ["#", 1, 2, 3, 4],
-    [  5, 0, 0, 0, 0],
-    [  6, 0, 0, 0, 0],
-    [  7, 0, 0, 0, 0],
-    [  8, 0, 0, 0, "#"]
+    ["#",1,2,3,4],
+    [5,0,0,0,0],
+    [6,0,0,0,0],
+    [7,0,0,0,0],
+    [8,0,0,0,"#"]
   ],
   "solution": [
-    ["#", "A", "R", "T", "S"],
-    ["C", "L", "A", "R", "A"],
-    ["A", "L", "L", "E", "N"],
-    ["M", "A", "L", "E", "S"],
-    ["P", "H", "Y", "S", "#"]
+    ["#","S","W","A","P"],
+    ["C","L","O","S","E"],
+    ["L","I","M","I","T"],
+    ["I","D","E","A","S"],
+    ["P","E","N","N","#"]
   ],
   "clues": {
     "Across": [
-      [1, "Creative works"],
-      [5, "You look like her in this light"],
-      [6, "Kevin"],
-      [7, "Lads"],
-      [8, "Lenord Susskind studies"]
-    ],
-    "Down": [
-      [1, "God"],
-      [2, "_ the troops"],
-      [3, "Tall and green"],
-      [4, "Without, related to fonts"],
-      [5, "Residence in the woods"]
+      [1, "Clue for 'swap'"],
+      [5, "Clue for 'close'"],
+      [6, "Clue for 'limit'"],
+      [7, "Clue for 'ideas'"],
+      [8, "Clue for 'penn'"]
+  ],
+  "Down": [
+      [1, "Clue for 'slide'"],
+      [2, "Clue for 'women'"],
+      [3, "Clue for 'asian'"],
+      [4, "Clue for 'pets'"],
+      [5, "Clue for 'clip'"]
     ]
   }
 }

@@ -3,6 +3,7 @@
 #include <string>
 #include <array>
 #include <sstream>
+#include <map>
 #include <fstream>
 #include <random>
 #include <set>
@@ -10,24 +11,9 @@
 
 #include <filesystem>
 
-constexpr size_t DIM = 5;
-constexpr size_t SIZE = DIM + 1;
-
-template <class T, size_t N>
-class FlatVector {
-public:
-    void push_back(T t) { data_[size_++] = t; }
-    T& operator[](const size_t i) { return data_[i]; }
-    const T& operator[](const size_t i) const { return data_[i]; }
-    T& at(const size_t i) { if (i >= size_) throw std::out_of_range("i >= size_"); return data_[i]; }
-    const T& at(const size_t i) const { if (i >= size_) throw std::out_of_range("i >= size_"); return data_[i]; }
-    bool empty() const { return size_ == 0; }
-    size_t size() const { return size_; }
-
-private:
-    size_t size_ = 0;
-    std::array<T, N> data_;
-};
+#include "flat_vector.hh"
+#include "lookup.hh"
+#include "constants.hh"
 
 std::vector<std::string> load_words(std::filesystem::path fname) {
     std::vector<std::string> words;
@@ -43,81 +29,6 @@ std::vector<std::string> load_words(std::filesystem::path fname) {
     return words;
 }
 
-class Lookup {
-public:
-    Lookup(const std::vector<std::string>& words) {
-        for (size_t i = 0; i < words.size(); ++i) {
-            const std::string& word = words[i];
-            if (word.size() > SIZE) {
-                throw std::runtime_error("Word is too long");
-            }
-            WordsSplitByCharacterAtPosition& entry = by_length_.at(word.size());
-            entry.all_words.push_back(i);
-
-            for (size_t l = 0; l < word.size(); ++l) {
-                entry.by_char_pos[l][to_index(word[l])].push_back(i);
-            }
-        }
-    }
-
-    std::vector<size_t> words_with_characters_at(const FlatVector<std::pair<size_t, char>, SIZE>& entries, size_t opening) {
-        if (entries.empty()) {
-            return by_length_[opening].all_words;
-        }
-        if (entries.size() == 1) {
-            return words_with_character_at(entries[0].first, entries[0].second, opening);
-        }
-
-        std::vector<size_t> merged = logical_and(
-            words_with_character_at(entries[0].first, entries[0].second, opening),
-            words_with_character_at(entries[1].first, entries[1].second, opening)
-        );
-        for (size_t i = 2; i < entries.size(); i ++) {
-            if (merged.empty()) {
-                return {};
-            }
-            merged = logical_and(merged, words_with_character_at(entries[i].first, entries[i].second, opening));
-        }
-        return merged;
-    }
-
-
-private:
-    const std::vector<size_t>& words_with_character_at(size_t pos, char c, size_t opening) const {
-        return by_length_.at(opening).by_char_pos.at(pos).at(to_index(c));
-    }
-
-    static std::vector<size_t> logical_and(const std::vector<size_t>& lhs, const std::vector<size_t>& rhs) {
-        size_t lhs_i = 0;
-        size_t rhs_i = 0;
-
-        std::vector<size_t> result;
-        while (lhs_i < lhs.size() && rhs_i < rhs.size()) {
-            const size_t& l = lhs[lhs_i];
-            const size_t& r = rhs[rhs_i];
-
-            if (l == r) {
-                result.push_back(l);
-                lhs_i++;
-            } else if (l < r) {
-                lhs_i++;
-            } else {
-                rhs_i++;
-            }
-        }
-        return result;
-    }
-
-    static size_t to_index(char c) { return std::tolower(c) - 'a'; }
-
-    struct WordsSplitByCharacterAtPosition {
-        using WordsSplitByCharacter = std::array<std::vector<size_t>, 26>;
-        std::array<WordsSplitByCharacter, SIZE> by_char_pos;
-        std::vector<size_t> all_words;
-    };
-    std::array<WordsSplitByCharacterAtPosition, SIZE> by_length_;
-};
-
 class Board {
 public:
     static constexpr char OPEN = ' ';
@@ -130,70 +41,81 @@ public:
     void set_index(size_t index, char c) { board_.at(index) = c; }
     void set(size_t row, size_t col, char c) { set_index(to_index(row, col), c); }
     void block(size_t row, size_t col) { set(row, col, BLOCKED); }
-
-    void fill(const std::vector<size_t>& indicies, const std::string& word) {
-        if (indicies.size() != word.size()) throw std::runtime_error(std::format("Different lengths {} != {}", indicies.size(), word.size()));
-
-        for (size_t i = 0; i < indicies.size(); ++i) {
-            board_[indicies[i]] = word[i];
-        }
+    char at_index(size_t index) const { return board_.at(index); }
+    char at(size_t row, size_t col) const { return at_index(to_index(row, col)); }
+    void reset_nonblocked_to_open() {
+        for (auto& c : board_) if (c != BLOCKED) c = OPEN;
     }
 
-    struct WordPair {
-        std::vector<size_t> row_indicies;
-        std::vector<size_t> col_indicies;
-    };
-
-    WordPair word_pairs(const size_t row, const size_t col) const {
-        WordPair word_pair;
-
-        int64_t start_row = row;
-        for (; start_row >= 0; --start_row) {
-            size_t index = to_index(start_row, col);
-            if (board_[index] == BLOCKED) break;
+    std::string read(const std::vector<size_t>& index) const {
+        std::string s;
+        s.reserve(index.size());
+        for (const size_t i : index) {
+            s.push_back(board_[i]);
         }
-        start_row++;
-
-        int64_t start_col = col;
-        for (; start_col >= 0; --start_col) {
-            size_t index = to_index(row, start_col);
-            if (board_[index] == BLOCKED) break;
-        }
-        start_col++;
-
-        for (size_t r = start_row; r < DIM; ++r) {
-            size_t index = to_index(r, col);
-            if (board_[index] == BLOCKED) break;
-            word_pair.col_indicies.push_back(index);
-        }
-
-        for (size_t c = start_col; c < DIM; ++c) {
-            size_t index = to_index(row, c);
-            if (board_[index] == BLOCKED) break;
-            word_pair.row_indicies.push_back(index);
-        }
-        return word_pair;
+        return s;
     }
 
-    struct IndexSets {
-        std::set<std::vector<size_t>> rows;
-        std::set<std::vector<size_t>> cols;
+    struct WordIndex {
+        std::map<size_t, std::vector<size_t>> rows;
+        std::map<size_t, std::vector<size_t>> cols;
     };
 
-    IndexSets index_sets() const {
-        IndexSets sets;
-        for (size_t col = 0; col < DIM; ++col) {
-            for (size_t row = 0; row < DIM; ++row) {
-                auto wp = word_pairs(row, col);
-                if (!wp.row_indicies.empty()) {
-                    sets.rows.emplace(std::move(wp.row_indicies));
+    WordIndex generate_word_index() const {
+        WordIndex result;
+
+        Board col_index = *this;
+        col_index.reset_nonblocked_to_open();
+        Board row_index = col_index;
+        size_t current_index = 1;
+
+        auto set_if_open = [&](size_t index, char c, Board& b) -> bool {
+            if (b.at_index(index) != OPEN) {
+                return false;
+            }
+            b.set_index(index, c);
+            return true;
+        };
+
+        // Iteration order is important!
+        for (size_t row = 0; row < DIM; ++row) {
+            for (size_t col = 0; col < DIM; ++col) {
+                const size_t board_index = to_index(row, col);
+
+                char c = at_index(board_index);
+                if (c == Board::BLOCKED) {
+                    continue;
                 }
-                if (!wp.col_indicies.empty()) {
-                    sets.cols.emplace(std::move(wp.col_indicies));
+
+                bool used = false;
+                if (set_if_open(board_index, current_index, col_index)) {
+                    used = true;
+                    result.cols[current_index].push_back(board_index);
+                    for (size_t inner = row + 1; inner < DIM; ++inner) {
+                        size_t inner_index = to_index(inner, col);
+
+                        if (!set_if_open(inner_index, '-', col_index)) break;
+                        result.cols[current_index].push_back(inner_index);
+                    }
+                }
+                if (set_if_open(board_index, current_index, row_index)) {
+                    used = true;
+                    result.rows[current_index].push_back(board_index);
+                    for (size_t inner = col + 1; inner < DIM; ++inner) {
+                        size_t inner_index = to_index(row, inner);
+
+                        if (!set_if_open(inner_index, '-', row_index)) break;
+                        result.rows[current_index].push_back(inner_index);
+                    }
+                }
+
+                if (used) {
+                    current_index++;
                 }
             }
         }
-        return sets;
+
+        return result;
     }
 
     std::string word(const std::vector<size_t>& indicies) const {
@@ -238,6 +160,61 @@ private:
     std::array<char, DIM * DIM> board_;
 };
 
+void write_ipuz(const Board& final_board, const Board::WordIndex& index, const std::filesystem::path& output) {
+    Board puzzle_board = final_board;
+    puzzle_board.reset_nonblocked_to_open();
+    for (const auto& [i, e] : index.rows) puzzle_board.set_index(e.front(), i);
+    for (const auto& [i, e] : index.cols) puzzle_board.set_index(e.front(), i);
+
+    std::ofstream file(output);
+    if (!file.is_open()) throw std::runtime_error(std::format("Unable to open '{}' for writing", output.string()));
+    file << "{\n";
+    file << "  \"version\": \"http://ipuz.org/v2\",\n";
+    file << "  \"kind\": \"http://ipuz.org/crofileword\",\n";
+    file << std::format(R"(  "dimensions": {{"width": {}, "height": {}}},)", DIM, DIM);
+    file << "\n  \"puzzle\": [\n";
+    for (size_t row = 0; row < DIM; ++row) {
+        file << "    [";
+        for (size_t col = 0; col < DIM; ++col) {
+            char c = puzzle_board.at(row, col);
+            if (c == Board::BLOCKED) file << "\"#\"";
+            else if (c == Board::OPEN) file << 0;
+            else file << (size_t)c;
+            if (col != DIM - 1) file << ",";
+        }
+        file << "]";
+        if (row != DIM - 1) file << ",";
+        file << "\n";
+    }
+    file << "  ],\n  \"solution\": [\n";
+    for (size_t row = 0; row < DIM; ++row) {
+        file << "    [";
+        for (size_t col = 0; col < DIM; ++col) {
+            char c = final_board.at(row, col);
+            file << '"' << (char)std::toupper(c) << '"';
+            if (col != DIM - 1) file << ",";
+        }
+        file << "]";
+        if (row != DIM - 1) file << ",";
+        file << "\n";
+    }
+    file << "  ],\n  \"clues\": {\n    \"Across\": [\n";
+    for (const auto& [i, e] : index.rows) {
+        file << "      [" << i << ", \"Clue for '" << final_board.read(e) << "'\"]";
+        if (i != index.rows.rbegin()->first) file << ",";
+        file << "\n";
+    }
+    file << "  ],\n  \"Down\": [\n";
+    for (const auto& [i, e] : index.cols) {
+        file << "      [" << i << ", \"Clue for '" << final_board.read(e) << "'\"]";
+        if (i != index.cols.rbegin()->first) file << ",";
+        file << "\n";
+    }
+    file << "    ]\n  }\n}";
+
+    file.close();
+}
+
 static std::mt19937 gen(42);
 
 int main() {
@@ -250,31 +227,16 @@ int main() {
 
     Board b;
     b.block(0, 0);
-    b.block(2, 2);
     b.block(4, 4);
 
-    auto index_sets = b.index_sets();
-    std::cout << "row:\n";
-    for (auto& e : index_sets.rows) {
-        std::cout << " ";
-        for (auto i : e) std::cout << i << " ";
-        std::cout << "\n";
-    }
-    std::cout << "\ncol:\n";
-    for (auto& e : index_sets.cols) {
-        std::cout << " ";
-        for (auto i : e) std::cout << i << " ";
-        std::cout << "\n";
-    }
-    std::cout << "\n";
-
     std::cout << b.to_string() << "\n";
+    const auto word_index = b.generate_word_index();
 
-    const size_t total_words = index_sets.rows.size() + index_sets.cols.size();
+    const size_t total_words = word_index.rows.size() + word_index.cols.size();
 
     std::vector<const std::vector<size_t>*> to_visit;
-    for (const auto& e : index_sets.rows) to_visit.push_back(&e);
-    for (const auto& e : index_sets.cols) to_visit.push_back(&e);
+    for (const auto& [_, e] : word_index.rows) to_visit.push_back(&e);
+    for (const auto& [_, e] : word_index.cols) to_visit.push_back(&e);
     std::shuffle(to_visit.begin(), to_visit.end(), gen);
 
     struct Dfs {
@@ -296,9 +258,9 @@ int main() {
         boards_checked++;
 
         const Timer::time_point now = Timer::now();
-        if (now - previous > std::chrono::seconds(1)) {
-            std::cout << std::format("Tested {} boards at {:.2f}/s\n", boards_checked,
-                boards_checked / std::chrono::duration_cast<std::chrono::duration<double>>(now - start).count());
+        if (now - previous > std::chrono::seconds(5)) {
+            std::cout << std::format("Tested {} boards at {:.2f}/ms\n", boards_checked,
+                boards_checked / std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(now - start).count());
             previous = now;
         }
 
@@ -313,15 +275,21 @@ int main() {
         //std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
         if (to_visit.empty()) {
-            std::cout << "DONE\n";
+            std::cout << "\nDONE\n";
             std::cout << board.to_string() << "\n";
+            std::filesystem::path path = std::format("/tmp/crossword_{}x{}_{}.ipuz", DIM, DIM, boards_checked);
+            write_ipuz(board, word_index, path);
+            std::cout << "Wrote data to " << path.string() << "\n\n";
             continue;
         }
 
         const std::vector<size_t>& indicies = *to_visit.back();
 
+        // Don't worry about single characters
         if (indicies.size() == 1) {
-            dfs.push({std::move(board), std::move(to_visit), std::move(used)});
+            auto next_to_visit = to_visit;
+            next_to_visit.pop_back();
+            dfs.push({std::move(board), std::move(next_to_visit), std::move(used)});
             continue;
         }
 
@@ -342,7 +310,10 @@ int main() {
             new_used.insert(index);
 
             Board new_board = board;
-            new_board.fill(indicies, candidate);
+            if (indicies.size() != candidate.size()) throw std::runtime_error("Invalid candidate lenght");
+            for (size_t j = 0; j < indicies.size(); ++j) {
+                new_board.set_index(indicies[j], candidate[j]);
+            }
             dfs.push({std::move(new_board), std::move(next_to_visit), std::move(new_used)});
         }
     }
