@@ -1,11 +1,27 @@
 #pragma once
 #include <vector>
 #include <string>
+#include <fstream>
 #include <array>
 #include <cstddef>
+#include <filesystem>
 
 #include "constants.hh"
 #include "flat_vector.hh"
+
+std::vector<std::string> load_words(std::filesystem::path fname) {
+    std::vector<std::string> words;
+    std::ifstream file(fname);
+    std::string word;
+
+    while (file >> word) {
+        if (word.size() > 1 && word.size() < SIZE) {
+            words.push_back(word);
+        }
+    }
+
+    return words;
+}
 
 std::vector<size_t> logical_and(const std::vector<size_t>& lhs, const std::vector<size_t>& rhs) {
     size_t lhs_i = 0;
@@ -46,11 +62,14 @@ public:
         }
     }
 
-    std::vector<size_t> words_with_characters_at(const FlatVector<std::pair<size_t, char>, SIZE>& entries, size_t opening) {
-        if (entries.empty()) {
-            return by_length_[opening].all_words;
-        }
+    const std::vector<size_t>& words_of_length(size_t length) const {
+        return by_length_[length].all_words;
+    }
 
+    std::vector<size_t> words_with_characters_at(const FlatVector<std::pair<size_t, char>, SIZE>& entries, size_t opening) const {
+        if (entries.empty()) {
+            return words_of_length(opening);
+        }
         if (entries.size() == 1) {
             return words_with_character_at(entries[0].first, entries[0].second, opening);
         }
@@ -67,7 +86,6 @@ public:
         }
         return merged;
     }
-
 
 private:
     const std::vector<size_t>& words_with_character_at(size_t pos, char c, size_t opening) const {

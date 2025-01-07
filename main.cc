@@ -1,33 +1,19 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <format>
 #include <array>
 #include <sstream>
 #include <map>
-#include <fstream>
 #include <random>
 #include <set>
-#include <list>
+#include <fstream>
 
 #include <filesystem>
 
 #include "flat_vector.hh"
 #include "lookup.hh"
 #include "constants.hh"
-
-std::vector<std::string> load_words(std::filesystem::path fname) {
-    std::vector<std::string> words;
-    std::ifstream file(fname);
-    std::string word;
-
-    while (file >> word) {
-        if (word.size() > 1 && word.size() < SIZE) {
-            words.push_back(word);
-        }
-    }
-
-    return words;
-}
 
 class Board {
 public:
@@ -220,8 +206,6 @@ static std::mt19937 gen(42);
 int main() {
     std::vector<std::string> words = load_words("/Users/mattlangford/Downloads/google-10000-english-usa.txt");
     std::cout << "Loaded " << words.size() << " words\n";
-    
-    const std::set<std::string> word_set{words.begin(), words.end()};
 
     Lookup lookup(words);
 
@@ -294,7 +278,9 @@ int main() {
         }
 
         const auto positions = board.get_characters_at(indicies);
-        const auto candidates = lookup.words_with_characters_at(positions, indicies.size());
+        const auto& candidates = positions.empty() ? 
+            lookup.words_of_length(indicies.size()) :
+            lookup.words_with_characters_at(positions, indicies.size());
         size_t start_index = start_index_dist(gen);
         for (size_t i = 0; i < candidates.size(); ++i) {
             const size_t index = candidates[(start_index + i) % candidates.size()];
