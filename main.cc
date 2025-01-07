@@ -270,7 +270,6 @@ int main() {
 
     std::cout << b.to_string() << "\n";
 
-    return 0;
     const size_t total_words = index_sets.rows.size() + index_sets.cols.size();
 
     std::vector<const std::vector<size_t>*> to_visit;
@@ -286,9 +285,23 @@ int main() {
 
     std::uniform_int_distribution<> start_index_dist(0, 1000);
 
+    size_t boards_checked = 0;
+    using Timer = std::chrono::high_resolution_clock;
+    const Timer::time_point start = Timer::now();
+    Timer::time_point previous = start;
+
     std::stack<Dfs> dfs;
     dfs.push(Dfs{b, std::move(to_visit), {}});
     while (!dfs.empty()) {
+        boards_checked++;
+
+        const Timer::time_point now = Timer::now();
+        if (now - previous > std::chrono::seconds(1)) {
+            std::cout << std::format("Tested {} boards at {:.2f}/s\n", boards_checked,
+                boards_checked / std::chrono::duration_cast<std::chrono::duration<double>>(now - start).count());
+            previous = now;
+        }
+
         auto [board, to_visit, used] = std::move(dfs.top());
         dfs.pop();
 
