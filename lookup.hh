@@ -9,26 +9,15 @@
 #include "constants.hh"
 #include "flat_vector.hh"
 
-std::vector<std::string> load_words(std::filesystem::path fname) {
-    std::vector<std::string> words;
-    std::ifstream file(fname);
-    std::string word;
-
-    while (file >> word) {
-        if (word.size() > 1 && word.size() < SIZE) {
-            words.push_back(word);
-        }
-    }
-
-    return words;
-}
-
 std::vector<size_t> logical_and(const std::vector<size_t>& lhs, const std::vector<size_t>& rhs) {
     size_t lhs_i = 0;
     size_t rhs_i = 0;
 
+    const size_t lhs_size = lhs.size();
+    const size_t rhs_size = rhs.size();
+
     std::vector<size_t> result;
-    while (lhs_i < lhs.size() && rhs_i < rhs.size()) {
+    while (lhs_i < lhs_size && rhs_i < rhs_size) {
         size_t l = lhs[lhs_i];
         size_t r = rhs[rhs_i];
 
@@ -47,11 +36,15 @@ std::vector<size_t> logical_and(const std::vector<size_t>& lhs, const std::vecto
 
 class Lookup {
 public:
-    Lookup(const std::vector<std::string>& words) {
-        for (size_t i = 0; i < words.size(); ++i) {
-            const std::string& word = words[i];
-            if (word.size() > SIZE) {
-                throw std::runtime_error("Word is too long");
+    Lookup(std::filesystem::path fname) {
+        std::vector<std::string> words;
+        std::ifstream file(fname);
+        std::string word;
+
+        size_t i = 0;
+        while (file >> word) {
+            if (word.size() <= 1 || word.size() > DIM) {
+                continue;
             }
             WordsSplitByCharacterAtPosition& entry = by_length_.at(word.size());
             entry.all_words.push_back(i);
@@ -59,7 +52,10 @@ public:
             for (size_t l = 0; l < word.size(); ++l) {
                 entry.by_char_pos[l][to_index(word[l])].push_back(i);
             }
+            i++;
+            words_.push_back(std::move(word));
         }
+        std::cout << "Loaded " << i << " words\n";
     }
 
     const std::vector<size_t>& words_of_length(size_t length) const {
@@ -87,6 +83,10 @@ public:
         return merged;
     }
 
+    const std::string& word(size_t index) {
+        return words_.at(index);
+    }
+
 private:
     const std::vector<size_t>& words_with_character_at(size_t pos, char c, size_t opening) const {
         return by_length_.at(opening).by_char_pos.at(pos).at(to_index(c));
@@ -100,4 +100,5 @@ private:
         std::vector<size_t> all_words;
     };
     std::array<WordsSplitByCharacterAtPosition, SIZE> by_length_;
+    std::vector<std::string> words_;
 };

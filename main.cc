@@ -204,10 +204,7 @@ void write_ipuz(const Board& final_board, const Board::WordIndex& index, const s
 static std::mt19937 gen(42);
 
 int main() {
-    std::vector<std::string> words = load_words("/Users/mattlangford/Downloads/google-10000-english-usa.txt");
-    std::cout << "Loaded " << words.size() << " words\n";
-
-    Lookup lookup(words);
+    Lookup lookup("/Users/mattlangford/Downloads/google-10000-english-usa.txt");
 
     Board b;
     b.block(0, 0);
@@ -291,7 +288,7 @@ int main() {
             auto next_to_visit = to_visit;
             next_to_visit.pop_back();
 
-            const std::string& candidate = words.at(index);
+            const std::string& candidate = lookup.word(index);
             auto new_used = used;
             new_used.insert(index);
 
