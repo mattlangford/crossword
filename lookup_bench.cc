@@ -25,7 +25,7 @@ int main() {
 
     std::uniform_int_distribution<size_t> opening_dist(2, DIM);
 
-    constexpr size_t TEST_RUNS = 100'000'000;
+    constexpr size_t TEST_RUNS = 10000000;
 
     struct Cases {
         size_t opening;
@@ -38,6 +38,13 @@ int main() {
     }
     std::cout << test_cases.size() << " test cases generated\n";
 
+    std::vector<std::vector<WordIndex>> expected;
+    expected.push_back({751, 1864});
+    expected.push_back({3462});
+    expected.push_back({352, 631, 835, 929, 980, 1072, 1566, 1598, 1740, 1902, 1984, 2024, 2061, 2063, 2299, 2335, 2564, 2788, 3059});
+    expected.push_back({});
+    expected.push_back({1106, 1484, 1635, 2305, 2775, 3104, 3340, 3359, 3428, 3435, 3475});
+
     double avg = 0.0;
 
     using Timer = std::chrono::high_resolution_clock;
@@ -45,6 +52,11 @@ int main() {
     for (size_t run = 0; run < TEST_RUNS; ++run) {
         const auto& [opening, request] = test_cases[run % test_cases.size()];
         const auto indicies = lookup.words_with_characters_at(request, opening);
+        if (run < expected.size()) {
+            if (expected[run] != indicies) {
+                throw std::runtime_error("Not matching expected!");
+            }
+        }
         avg += indicies.size();
 
         // std::cout << "Opening " << opening << ":\n";
