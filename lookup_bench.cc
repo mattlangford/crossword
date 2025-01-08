@@ -6,11 +6,11 @@
 
 std::mt19937_64 rng(42);
 
-FlatVector<std::pair<size_t, char>, SIZE> generate_request(size_t opening) {
+FlatVector<std::pair<WordIndex, char>, SIZE> generate_request(size_t opening) {
     std::uniform_int_distribution<int> dist('a', 'z');
     std::bernoulli_distribution b(0.5);
 
-    FlatVector<std::pair<size_t, char>, SIZE> result;
+    FlatVector<std::pair<WordIndex, char>, SIZE> result;
     for (size_t i = 0; i < opening; ++i) {
         if (b(rng)) {
             result.push_back(std::make_pair(i, dist(rng)));
@@ -29,7 +29,7 @@ int main() {
 
     struct Cases {
         size_t opening;
-        FlatVector<std::pair<size_t, char>, SIZE> request;
+        FlatVector<std::pair<WordIndex, char>, SIZE> request;
     };
     std::vector<Cases> test_cases;
     for (size_t test_case = 0; test_case < 0.001 * TEST_RUNS; ++test_case) {

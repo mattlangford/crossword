@@ -9,32 +9,7 @@
 #include "constants.hh"
 #include "flat_vector.hh"
 
-std::vector<size_t> logical_and(const std::vector<size_t>& lhs, const std::vector<size_t>& rhs) {
-    size_t lhs_i = 0;
-    size_t rhs_i = 0;
-
-    const size_t lhs_size = lhs.size();
-    const size_t rhs_size = rhs.size();
-
-    std::vector<size_t> result;
-    while (lhs_i < lhs_size && rhs_i < rhs_size) {
-        size_t l = lhs[lhs_i];
-        size_t r = rhs[rhs_i];
-
-        if (l == r) {
-            result.push_back(l);
-            lhs_i++;
-            rhs_i++;
-        } else if (l < r) {
-            lhs_i++;
-        } else {
-            rhs_i++;
-        }
-    }
-    return result;
-}
-
-void logical_and_inplace(std::vector<size_t>& lhs, const std::vector<size_t>& rhs) {
+void logical_and_inplace(std::vector<WordIndex>& lhs, const std::vector<WordIndex>& rhs) {
     if (rhs.empty()) {
         lhs.clear();
         return;
@@ -60,7 +35,6 @@ void logical_and_inplace(std::vector<size_t>& lhs, const std::vector<size_t>& rh
     }
 }
 
-
 class Lookup {
 public:
     Lookup(std::filesystem::path fname) {
@@ -82,16 +56,16 @@ public:
         std::cout << "Loaded " << words_.size() << " words\n";
     }
 
-    const std::vector<size_t>& words_of_length(size_t length) const {
+    const std::vector<WordIndex>& words_of_length(size_t length) const {
         return by_length_[length].all_words;
     }
 
-    std::vector<size_t> words_with_characters_at(const FlatVector<std::pair<size_t, char>, SIZE>& entries, size_t opening) const {
+    std::vector<WordIndex> words_with_characters_at(const FlatVector<std::pair<WordIndex, char>, SIZE>& entries, size_t opening) const {
         if (entries.empty()) {
             return words_of_length(opening);
         }
 
-        std::vector<size_t> merged = 
+        std::vector<WordIndex> merged = 
             words_with_character_at(entries[0].first, entries[0].second, opening);
 
         for (size_t i = 1; i < entries.size(); i ++) {
@@ -106,16 +80,16 @@ public:
     const std::string& word(size_t index) const { return words_.at(index); }
 
 private:
-    const std::vector<size_t>& words_with_character_at(size_t pos, char c, size_t opening) const {
+    const std::vector<WordIndex>& words_with_character_at(size_t pos, char c, size_t opening) const {
         return by_length_.at(opening).by_char_pos.at(pos).at(to_index(c));
     }
 
     static size_t to_index(char c) { return std::tolower(c) - 'a'; }
 
     struct WordsSplitByCharacterAtPosition {
-        using WordsSplitByCharacter = std::array<std::vector<size_t>, 26>;
+        using WordsSplitByCharacter = std::array<std::vector<WordIndex>, 26>;
         std::array<WordsSplitByCharacter, SIZE> by_char_pos;
-        std::vector<size_t> all_words;
+        std::vector<WordIndex> all_words;
     };
     std::array<WordsSplitByCharacterAtPosition, SIZE> by_length_;
     std::vector<std::string> words_;

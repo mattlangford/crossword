@@ -20,42 +20,44 @@ public:
     static constexpr char OPEN = ' ';
     static constexpr char BLOCKED = '#';
 
+    using Index = uint16_t;
+
     Board() {
         for (auto& c : board_) c = OPEN;
     }
 
-    void set_index(size_t index, char c) { board_.at(index) = c; }
-    void set(size_t row, size_t col, char c) { set_index(to_index(row, col), c); }
-    void block(size_t row, size_t col) { set(row, col, BLOCKED); }
-    char at_index(size_t index) const { return board_.at(index); }
-    char at(size_t row, size_t col) const { return at_index(to_index(row, col)); }
+    void set_index(Index index, char c) { board_.at(index) = c; }
+    void set(uint8_t row, uint8_t col, char c) { set_index(to_index(row, col), c); }
+    void block(uint8_t row, uint8_t col) { set(row, col, BLOCKED); }
+    char at_index(Index index) const { return board_.at(index); }
+    char at(uint8_t row, uint8_t col) const { return at_index(to_index(row, col)); }
     void reset_nonblocked_to_open() {
         for (auto& c : board_) if (c != BLOCKED) c = OPEN;
     }
 
-    std::string read(const std::vector<size_t>& index) const {
+    std::string read(const std::vector<WordIndex>& index) const {
         std::string s;
         s.reserve(index.size());
-        for (const size_t i : index) {
+        for (const WordIndex i : index) {
             s.push_back(board_[i]);
         }
         return s;
     }
 
-    struct WordIndex {
-        std::map<size_t, std::vector<size_t>> rows;
-        std::map<size_t, std::vector<size_t>> cols;
+    struct WordIndicies {
+        std::map<size_t, std::vector<Index>> rows;
+        std::map<size_t, std::vector<Index>> cols;
     };
 
-    WordIndex generate_word_index() const {
-        WordIndex result;
+    WordIndicies generate_word_index() const {
+        WordIndicies result;
 
         Board col_index = *this;
         col_index.reset_nonblocked_to_open();
         Board row_index = col_index;
         size_t current_index = 1;
 
-        auto set_if_open = [&](size_t index, char c, Board& b) -> bool {
+        auto set_if_open = [&](Index index, char c, Board& b) -> bool {
             if (b.at_index(index) != OPEN) {
                 return false;
             }
@@ -64,9 +66,9 @@ public:
         };
 
         // Iteration order is important!
-        for (size_t row = 0; row < DIM; ++row) {
-            for (size_t col = 0; col < DIM; ++col) {
-                const size_t board_index = to_index(row, col);
+        for (uint8_t row = 0; row < DIM; ++row) {
+            for (uint8_t col = 0; col < DIM; ++col) {
+                const Index board_index = to_index(row, col);
 
                 char c = at_index(board_index);
                 if (c == Board::BLOCKED) {
@@ -77,8 +79,8 @@ public:
                 if (set_if_open(board_index, current_index, col_index)) {
                     used = true;
                     result.cols[current_index].push_back(board_index);
-                    for (size_t inner = row + 1; inner < DIM; ++inner) {
-                        size_t inner_index = to_index(inner, col);
+                    for (uint8_t inner = row + 1; inner < DIM; ++inner) {
+                        Index inner_index = to_index(inner, col);
 
                         if (!set_if_open(inner_index, '-', col_index)) break;
                         result.cols[current_index].push_back(inner_index);
@@ -87,8 +89,8 @@ public:
                 if (set_if_open(board_index, current_index, row_index)) {
                     used = true;
                     result.rows[current_index].push_back(board_index);
-                    for (size_t inner = col + 1; inner < DIM; ++inner) {
-                        size_t inner_index = to_index(row, inner);
+                    for (uint8_t inner = col + 1; inner < DIM; ++inner) {
+                        Index inner_index = to_index(row, inner);
 
                         if (!set_if_open(inner_index, '-', row_index)) break;
                         result.rows[current_index].push_back(inner_index);
@@ -104,16 +106,16 @@ public:
         return result;
     }
 
-    std::string word(const std::vector<size_t>& indicies) const {
+    std::string word(const std::vector<Index>& indicies) const {
         std::string s;
-        for (const auto& i : indicies) s += board_.at(i);
+        for (const Index& i : indicies) s += board_.at(i);
         return s;
     }
 
-    FlatVector<std::pair<size_t, char>, SIZE> get_characters_at(const std::vector<size_t>& indicies) const {
-        FlatVector<std::pair<size_t, char>, SIZE> result;
+    FlatVector<std::pair<WordIndex, char>, SIZE> get_characters_at(const std::vector<WordIndex>& indicies) const {
+        FlatVector<std::pair<WordIndex, char>, SIZE> result;
         std::string w = word(indicies);
-        for (size_t i = 0; i < w.size(); ++i) {
+        for (WordIndex i = 0; i < w.size(); ++i) {
             char c = w[i];
             if (c == BLOCKED) throw std::runtime_error("Found blocked!");
             if (c != OPEN) {
@@ -126,27 +128,27 @@ public:
     std::string to_string() const {
         std::stringstream ss;
         ss << "  ";
-        for (size_t col = 0; col < DIM; col++) ss << col;
+        for (uint8_t col = 0; col < DIM; col++) ss << col;
         ss << "\n";
-        for (size_t row = 0; row < DIM; row++) {
+        for (uint8_t row = 0; row < DIM; row++) {
             ss << row << "|";
-            for (size_t col = 0; col < DIM; col++) {
+            for (uint8_t col = 0; col < DIM; col++) {
                 ss << board_.at(to_index(row, col));
             }
             ss << "|\n";
         }
-        for (size_t col = 0; col < DIM; col++) ss << "-";
+        for (uint8_t col = 0; col < DIM; col++) ss << "-";
         ss << "----";
         return ss.str();
     }
 
 private:
-    size_t to_index(size_t row, size_t col) const { return row + col * DIM; }
+    uint16_t to_index(uint8_t row, uint8_t col) const { return static_cast<uint16_t>(row) + col * DIM; }
 
     std::array<char, DIM * DIM> board_;
 };
 
-void write_ipuz(const Board& final_board, const Board::WordIndex& index, const std::filesystem::path& output) {
+void write_ipuz(const Board& final_board, const Board::WordIndicies& index, const std::filesystem::path& output) {
     Board puzzle_board = final_board;
     puzzle_board.reset_nonblocked_to_open();
     for (const auto& [i, e] : index.rows) puzzle_board.set_index(e.front(), i);
@@ -215,14 +217,14 @@ int main() {
 
     const size_t total_words = word_index.rows.size() + word_index.cols.size();
 
-    std::vector<const std::vector<size_t>*> to_visit;
+    std::vector<const std::vector<WordIndex>*> to_visit;
     for (const auto& [_, e] : word_index.rows) to_visit.push_back(&e);
     for (const auto& [_, e] : word_index.cols) to_visit.push_back(&e);
     std::shuffle(to_visit.begin(), to_visit.end(), gen);
 
     struct Dfs {
         Board board;
-        std::vector<const std::vector<size_t>*> to_visit;
+        std::vector<const std::vector<WordIndex>*> to_visit;
         std::set<size_t> used;
     };
 
@@ -261,7 +263,7 @@ int main() {
             continue;
         }
 
-        const std::vector<size_t>& indicies = *to_visit.back();
+        const std::vector<WordIndex>& indicies = *to_visit.back();
 
         // Don't worry about single characters
         if (indicies.size() == 1) {
