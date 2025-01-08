@@ -8,7 +8,7 @@ std::mt19937_64 rng(42);
 
 FlatVector<std::pair<WordIndex, char>, SIZE> generate_request(size_t opening) {
     std::uniform_int_distribution<int> dist('a', 'z');
-    std::bernoulli_distribution b(0.5);
+    std::bernoulli_distribution b(0.6);
 
     FlatVector<std::pair<WordIndex, char>, SIZE> result;
     for (size_t i = 0; i < opening; ++i) {
@@ -32,7 +32,7 @@ int main() {
         FlatVector<std::pair<WordIndex, char>, SIZE> request;
     };
     std::vector<Cases> test_cases;
-    for (size_t test_case = 0; test_case < 0.001 * TEST_RUNS; ++test_case) {
+    for (size_t test_case = 0; test_case < 0.003 * TEST_RUNS + 2; ++test_case) {
         size_t opening = opening_dist(rng);
         test_cases.push_back({opening, generate_request(opening)});
     }
@@ -43,7 +43,7 @@ int main() {
     expected.push_back({3462});
     expected.push_back({352, 631, 835, 929, 980, 1072, 1566, 1598, 1740, 1902, 1984, 2024, 2061, 2063, 2299, 2335, 2564, 2788, 3059});
     expected.push_back({});
-    expected.push_back({1106, 1484, 1635, 2305, 2775, 3104, 3340, 3359, 3428, 3435, 3475});
+    expected.push_back({36, 79, 627, 709, 743, 746, 750, 777, 835, 1016, 1181, 1207, 1308, 1530, 1569, 1726, 2112, 2770, 2775, 3273, 3294, 3307, 3360});
 
     double avg = 0.0;
 
@@ -52,19 +52,17 @@ int main() {
     for (size_t run = 0; run < TEST_RUNS; ++run) {
         const auto& [opening, request] = test_cases[run % test_cases.size()];
         const auto indicies = lookup.words_with_characters_at(request, opening);
+
+        // std::cout << "run " << run << ": " << "\n";
+        // for (auto i : indicies) std::cout << i << ", ";
+        // std::cout << "\n";
+
         if (run < expected.size()) {
             if (expected[run] != indicies) {
                 throw std::runtime_error("Not matching expected!");
             }
         }
         avg += indicies.size();
-
-        // std::cout << "Opening " << opening << ":\n";
-        // for (size_t i = 0; i < request.size(); ++i) {
-        //     auto [index, c] = request[i];
-        //     std::cout << " index " << index << " c: " << c << "\n";
-        // }
-        // std::cout << "got " << indicies.size() << " results\n";
     }
     const auto stop = Timer::now();
 

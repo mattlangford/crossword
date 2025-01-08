@@ -32,6 +32,15 @@ void logical_and_inplace(std::vector<WordIndex>& lhs, const std::vector<WordInde
             l_it++;
             r_it++;
         } else {
+            constexpr uint8_t WIDTH = 8;
+            while (std::distance(r_it, rhs.end()) >= WIDTH) {
+                uint16x8_t scalar_vec = vdupq_n_u16(*l_it);
+                uint16x8_t cmp = vcltq_u16(vld1q_u16(&*r_it), scalar_vec);
+                uint64_t bitmask = vget_lane_u64(vreinterpret_u64_u8(vmovn_u16(cmp)), 0);
+                size_t count = __builtin_popcountll(bitmask) / WIDTH;
+                r_it += count;
+                if (count != WIDTH) break;
+            }
             for (; r_it != rhs.end(); ++r_it) {
                 if (*l_it <= *r_it) {
                     break;
@@ -71,19 +80,25 @@ public:
         return by_length_[length].all_words;
     }
 
-    std::vector<WordIndex> words_with_characters_at(const FlatVector<std::pair<WordIndex, char>, SIZE>& entries, size_t opening) const {
-        if (entries.empty()) {
+    std::vector<WordIndex> words_with_characters_at(const FlatVector<std::pair<WordIndex, char>, SIZE>& query, size_t opening) const {
+        static size_t counter_ = 0;
+        // if (counter_++ % 100000 == 0) {
+        //     std::cout << "Query with opening " << opening << "\n";
+        //     for (size_t i = 0; i < query.size(); ++i) std::cout << " " << query[i].first << ": '" << query[i].second << "'\n";
+        //     std::cout << "\n";
+        // }
+        if (query.empty()) {
             return words_of_length(opening);
         }
 
         std::vector<WordIndex> merged = 
-            words_with_character_at(entries[0].first, entries[0].second, opening);
+            words_with_character_at(query[0].first, query[0].second, opening);
 
-        for (size_t i = 1; i < entries.size(); i ++) {
+        for (size_t i = 1; i < query.size(); i ++) {
             if (merged.empty()) {
                 return {};
             }
-            logical_and_inplace(merged, words_with_character_at(entries[i].first, entries[i].second, opening));
+            logical_and_inplace(merged, words_with_character_at(query[i].first, query[i].second, opening));
         }
         return merged;
     }
