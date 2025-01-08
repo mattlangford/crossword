@@ -236,7 +236,10 @@ int main() {
     Timer::time_point previous = start;
 
     std::stack<Dfs> dfs;
-    dfs.push(Dfs{b, std::move(to_visit), {}});
+    size_t size = to_visit.size();
+    std::vector<size_t> used;
+    used.reserve(to_visit.size());
+    dfs.push(Dfs{b, std::move(to_visit), std::move(used)});
     while (!dfs.empty()) {
         boards_checked++;
 
@@ -274,9 +277,7 @@ int main() {
         }
 
         const auto positions = board.get_characters_at(indicies);
-        const auto& candidates = positions.empty() ? 
-            lookup.words_of_length(indicies.size()) :
-            lookup.words_with_characters_at(positions, indicies.size());
+        const auto& candidates = lookup.words_with_characters_at(positions, indicies.size());
         size_t start_index = start_index_dist(gen);
         for (size_t i = 0; i < candidates.size(); ++i) {
             const size_t index = candidates[(start_index + i) % candidates.size()];
@@ -289,6 +290,7 @@ int main() {
 
             const std::string& candidate = lookup.word(index);
             auto new_used = used;
+            new_used.reserve(size);
             new_used.push_back(index);
 
             Board new_board = board;
