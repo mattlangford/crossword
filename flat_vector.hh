@@ -14,6 +14,11 @@ public:
     bool empty() const { return size_ == 0; }
     size_t size() const { return size_; }
 
+    T* begin() { return data_.begin(); }
+    T* end() { return data_.begin() + size_; }
+    const T* begin() const { return data_.begin(); }
+    const T* end() const { return data_.begin() + size_; }
+
 private:
     size_t size_ = 0;
     std::array<T, N> data_;

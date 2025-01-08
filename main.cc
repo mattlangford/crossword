@@ -225,7 +225,7 @@ int main() {
     struct Dfs {
         Board board;
         std::vector<const std::vector<WordIndex>*> to_visit;
-        std::set<size_t> used;
+        std::vector<size_t> used;
     };
 
     std::uniform_int_distribution<> start_index_dist(0, 1000);
@@ -280,7 +280,7 @@ int main() {
         size_t start_index = start_index_dist(gen);
         for (size_t i = 0; i < candidates.size(); ++i) {
             const size_t index = candidates[(start_index + i) % candidates.size()];
-            if (used.contains(index)) {
+            if (std::find(used.begin(), used.end(), index) != used.end()) {
                 continue;
             }
 
@@ -289,7 +289,7 @@ int main() {
 
             const std::string& candidate = lookup.word(index);
             auto new_used = used;
-            new_used.insert(index);
+            new_used.push_back(index);
 
             Board new_board = board;
             if (indicies.size() != candidate.size()) throw std::runtime_error("Invalid candidate length");
