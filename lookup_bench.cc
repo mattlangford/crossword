@@ -25,7 +25,7 @@ int main() {
 
     std::uniform_int_distribution<size_t> opening_dist(2, DIM);
 
-    constexpr size_t TEST_RUNS = 1'000'000'00;
+    constexpr size_t TEST_RUNS = 100'000'000;
 
     struct Cases {
         size_t opening;

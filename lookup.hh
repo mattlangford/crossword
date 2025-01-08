@@ -34,28 +34,52 @@ std::vector<size_t> logical_and(const std::vector<size_t>& lhs, const std::vecto
     return result;
 }
 
+void logical_and_inplace(std::vector<size_t>& lhs, const std::vector<size_t>& rhs) {
+    if (rhs.empty()) {
+        lhs.clear();
+        return;
+    }
+
+    auto l_it = lhs.begin();
+    auto r_it = rhs.begin();
+
+    while (l_it != lhs.end()) {
+        if (*l_it == *r_it) {
+            l_it++;
+            r_it++;
+        } else if (*l_it < *r_it) {
+            l_it = lhs.erase(l_it);
+        } else {
+            r_it++;
+        }
+
+        if (r_it == rhs.end()) {
+            lhs.erase(l_it, lhs.end());
+            break;
+        }
+    }
+}
+
+
 class Lookup {
 public:
     Lookup(std::filesystem::path fname) {
-        std::vector<std::string> words;
         std::ifstream file(fname);
         std::string word;
 
-        size_t i = 0;
         while (file >> word) {
             if (word.size() <= 1 || word.size() > DIM) {
                 continue;
             }
             WordsSplitByCharacterAtPosition& entry = by_length_.at(word.size());
-            entry.all_words.push_back(i);
+            entry.all_words.push_back(words_.size());
 
             for (size_t l = 0; l < word.size(); ++l) {
-                entry.by_char_pos[l][to_index(word[l])].push_back(i);
+                entry.by_char_pos[l][to_index(word[l])].push_back(words_.size());
             }
-            i++;
             words_.push_back(std::move(word));
         }
-        std::cout << "Loaded " << i << " words\n";
+        std::cout << "Loaded " << words_.size() << " words\n";
     }
 
     const std::vector<size_t>& words_of_length(size_t length) const {
@@ -66,26 +90,20 @@ public:
         if (entries.empty()) {
             return words_of_length(opening);
         }
-        if (entries.size() == 1) {
-            return words_with_character_at(entries[0].first, entries[0].second, opening);
-        }
 
-        std::vector<size_t> merged = logical_and(
-            words_with_character_at(entries[0].first, entries[0].second, opening),
-            words_with_character_at(entries[1].first, entries[1].second, opening)
-        );
-        for (size_t i = 2; i < entries.size(); i ++) {
+        std::vector<size_t> merged = 
+            words_with_character_at(entries[0].first, entries[0].second, opening);
+
+        for (size_t i = 1; i < entries.size(); i ++) {
             if (merged.empty()) {
                 return {};
             }
-            merged = logical_and(merged, words_with_character_at(entries[i].first, entries[i].second, opening));
+            logical_and_inplace(merged, words_with_character_at(entries[i].first, entries[i].second, opening));
         }
         return merged;
     }
 
-    const std::string& word(size_t index) {
-        return words_.at(index);
-    }
+    const std::string& word(size_t index) const { return words_.at(index); }
 
 private:
     const std::vector<size_t>& words_with_character_at(size_t pos, char c, size_t opening) const {

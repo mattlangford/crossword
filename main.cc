@@ -248,12 +248,9 @@ int main() {
         auto [board, to_visit, used] = std::move(dfs.top());
         dfs.pop();
 
-        //std::cout << "\n";
-        //std::cout << board.to_string() << "\n";
-        //if (!to_visit.empty()) {
-        //    for (const auto i : to_visit.back()) std::cout << i << " ";
-        //}
-        //std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        std::cout << "\n";
+        std::cout << board.to_string() << "\n";
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
         if (to_visit.empty()) {
             std::cout << "\nDONE\n";
@@ -293,7 +290,7 @@ int main() {
             new_used.insert(index);
 
             Board new_board = board;
-            if (indicies.size() != candidate.size()) throw std::runtime_error("Invalid candidate lenght");
+            if (indicies.size() != candidate.size()) throw std::runtime_error("Invalid candidate length");
             for (size_t j = 0; j < indicies.size(); ++j) {
                 new_board.set_index(indicies[j], candidate[j]);
             }
