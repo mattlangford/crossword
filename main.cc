@@ -128,10 +128,10 @@ public:
     std::string to_string() const {
         std::stringstream ss;
         ss << "  ";
-        for (uint8_t col = 0; col < DIM; col++) ss << col;
+        for (uint8_t col = 0; col < DIM; col++) ss << (int)col;
         ss << "\n";
         for (uint8_t row = 0; row < DIM; row++) {
-            ss << row << "|";
+            ss << (int) row << "|";
             for (uint8_t col = 0; col < DIM; col++) {
                 ss << board_.at(to_index(row, col));
             }
@@ -250,9 +250,9 @@ int main() {
         auto [board, to_visit, used] = std::move(dfs.top());
         dfs.pop();
 
-        std::cout << "\n";
-        std::cout << board.to_string() << "\n";
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        // std::cout << "\n";
+        // std::cout << board.to_string() << "\n";
+        // std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
         if (to_visit.empty()) {
             std::cout << "\nDONE\n";

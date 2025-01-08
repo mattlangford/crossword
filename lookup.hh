@@ -16,12 +16,6 @@ void logical_and_inplace(std::vector<WordIndex>& lhs, const std::vector<WordInde
         return;
     }
 
-    // std::cout << "lhs: ";
-    // for (auto i : lhs) std::cout << i << " ";
-    // std::cout << "\nrhs: ";
-    // for (auto i : rhs) std::cout << i << " ";
-    // std::cout << "\n";
-
     auto l_it = lhs.begin();
     auto r_it = rhs.begin();
 
@@ -32,9 +26,8 @@ void logical_and_inplace(std::vector<WordIndex>& lhs, const std::vector<WordInde
                 break;
             }
         }
-        if (l_it != next_it) {
-            l_it = lhs.erase(l_it, next_it);
-        }
+        l_it = lhs.erase(l_it, next_it);
+
         if (*l_it == *r_it) {
             l_it++;
             r_it++;
@@ -52,65 +45,6 @@ void logical_and_inplace(std::vector<WordIndex>& lhs, const std::vector<WordInde
         }
     }
 }
-
-void logical_and_inplace_simd(std::vector<WordIndex>& lhs, const std::vector<WordIndex>& rhs) {
-    if (rhs.empty()) {
-        lhs.clear();
-        return;
-    }
-
-    std::cout << "lhs: ";
-    for (auto i : lhs) std::cout << i << " ";
-    std::cout << "\nrhs:";
-    for (auto i : rhs) std::cout << i << " ";
-    std::cout << "\n";
-
-    auto l_it = lhs.begin();
-    auto r_it = rhs.begin();
-
-    constexpr uint8_t WIDTH = 8;
-    while (l_it != lhs.end() && std::distance(r_it, rhs.end()) >= WIDTH) {
-        uint16x8_t l_val = vdupq_n_u16(*l_it);
-        uint16x8_t r_vec = vld1q_u16(&(*r_it));
-        uint16x8_t gt_mask = vcgtq_u16(r_vec, l_val);
-
-        /*
-        for (; lane < WIDTH; ++lane) {
-            if (elements[lane]) break;
-        }
-        std::cout << "Skip " << (int)lane << "\n";
-        l_it = lhs.erase(l_it, l_it + lane);
-
-        if (*l_it == *r_it) {
-            l_it++;
-        } else {
-            std::advance(r_it, WIDTH - lane);
-        }
-        */
-    }
-
-    if (r_it == rhs.end()) {
-        lhs.erase(l_it, lhs.end());
-        return;
-    }
-
-    while (l_it != lhs.end()) {
-        if (*l_it == *r_it) {
-            l_it++;
-            r_it++;
-        } else if (*l_it < *r_it) {
-            l_it = lhs.erase(l_it);
-        } else {
-            r_it++;
-        }
-
-        if (r_it == rhs.end()) {
-            lhs.erase(l_it, lhs.end());
-            break;
-        }
-    }
-}
-
 
 class Lookup {
 public:
