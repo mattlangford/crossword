@@ -14,10 +14,22 @@ public:
     bool empty() const { return size_ == 0; }
     size_t size() const { return size_; }
 
+    const T& front() const { return data_[0]; }
+    const T& back() const { return data_[size_ - 1]; }
+
     T* begin() { return data_.begin(); }
     T* end() { return data_.begin() + size_; }
     const T* begin() const { return data_.begin(); }
     const T* end() const { return data_.begin() + size_; }
+
+    auto operator<=>(const FlatVector<T, N>& rhs) const = default;
+    bool operator==(const FlatVector<T, N>& rhs) const {
+        if (size() != rhs.size()) return false;
+        for (size_t i = 0; i < size(); ++i) {
+            if (data_[i] != rhs[i]) return false;
+        }
+        return true;
+    }
 
 private:
     size_t size_ = 0;

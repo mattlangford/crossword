@@ -51,11 +51,13 @@ int main() {
     const auto start = Timer::now();
     for (size_t run = 0; run < TEST_RUNS; ++run) {
         const auto& [opening, request] = test_cases[run % test_cases.size()];
-        const auto indicies = lookup.words_with_characters_at(request, opening);
+        const auto& indicies = lookup.words_with_characters_at(request, opening);
 
         // std::cout << "run " << run << ": " << "\n";
         // for (auto i : indicies) std::cout << i << ", ";
-        // std::cout << "\n";
+        // std::cout << " (";
+        // for (auto i : indicies) std::cout << lookup.word(i) << ", ";
+        // std::cout << ")\n";
 
         if (run < expected.size()) {
             if (expected[run] != indicies) {
