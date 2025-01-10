@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <algorithm>
 #include <format>
 #include <array>
 #include <sstream>
@@ -8,6 +9,7 @@
 #include <random>
 #include <set>
 #include <fstream>
+#include <thread>
 
 #include <filesystem>
 
@@ -26,7 +28,10 @@ public:
         for (auto& c : board_) c = OPEN;
     }
 
-    void set_index(Index index, char c) { board_.at(index) = c; }
+    void set_index(Index index, char c) {
+        if (index >= board_.size()) throw std::runtime_error("Trying to index outside of the board");
+        board_[index] = c;
+    }
     void set(uint8_t row, uint8_t col, char c) { set_index(to_index(row, col), c); }
     void block(uint8_t row, uint8_t col) { set(row, col, BLOCKED); }
     char at_index(Index index) const { return board_.at(index); }
@@ -196,20 +201,32 @@ void write_ipuz(const Board& final_board, const Board::WordIndicies& index, cons
     file.close();
 }
 
+
 class DfsHelper {
 private:
     struct Dfs {
         Board board;
 
         uint16_t used_words = 0;
-        uint16_t visited = 0;
 
         union Contained {
             const std::vector<WordIndex>* to_visit;
             WordIndex word;
         };
         std::vector<Contained> contained;
+
+        std::string to_string() {
+            std::string s = board.to_string();
+            s += std::format("\n used words: {}/{} (", used_words, contained.size());
+            for (size_t i = 0; i < used_words; ++i) {
+                if (i != 0) s += " ";
+                s += std::to_string(contained[i].word);
+            }
+            s += ")";
+            return s;
+        }
     };
+
 public:
     DfsHelper(Board b, const std::vector<const std::vector<WordIndex>*>& to_visit) {
         Dfs d;
@@ -223,8 +240,8 @@ public:
     bool done() const { return data_.empty(); }
 
     const std::vector<WordIndex>* indicies(const Dfs& current) const {
-        if (current.visited >= current.contained.size()) return nullptr;
-        return current.contained[current.visited].to_visit;
+        if (current.used_words >= current.contained.size()) return nullptr;
+        return current.contained[current.used_words].to_visit;
     }
 
     bool used_word(const Dfs& current, size_t candidate) const {
@@ -241,7 +258,6 @@ public:
     void push(Dfs current, Board new_board, size_t index) {
         current.board = std::move(new_board);
         current.contained[current.used_words++].word = index;
-        current.visited++;
         data_.push(std::move(current));
     }
 
@@ -256,43 +272,69 @@ private:
     std::stack<Dfs> data_;
 };
 
-static std::mt19937 gen(42);
+static std::mt19937 gen(123);
+static std::uniform_int_distribution<> start_index_dist(0, 1000);
+using Timer = std::chrono::high_resolution_clock;
+static Timer::time_point start;
 
-int main() {
-    Lookup lookup("/Users/mattlangford/Downloads/google-10000-english-usa.txt");
+std::vector<const std::vector<WordIndex>*> alternating_shuffle(const Board::WordIndicies& word_index) {
+    std::vector<const std::vector<WordIndex>*> rows;
+    rows.reserve(word_index.rows.size());
+    for (const auto& [_, e] : word_index.rows) rows.push_back(&e);
+    std::vector<const std::vector<WordIndex>*> cols;
+    cols.reserve(word_index.cols.size());
+    for (const auto& [_, e] : word_index.cols) cols.push_back(&e);
 
-    Board b;
-    b.block(0, 0);
-    b.block(4, 4);
-    // b.block(0, 5);
-    // b.block(5, 0);
+    std::shuffle(rows.begin(), rows.end(), gen);
+    std::shuffle(cols.begin(), cols.end(), gen);
 
-    std::cout << b.to_string() << "\n";
-    const auto word_index = b.generate_word_index();
+    std::vector<const std::vector<WordIndex>*> result;
+    result.reserve(rows.size() + cols.size());
+    std::bernoulli_distribution dist(0.5);
+    bool rows_first = dist(gen);
+    size_t i = 0;
+    size_t j = 0;
+    const auto& vec1 = rows_first ? rows : cols;
+    const auto& vec2 = rows_first ? cols : rows;
+    while (i < vec1.size() || j < vec2.size()) {
+        if (i < rows.size()) {
+            result.push_back(vec1[i++]);
+        }
+        if (j < vec2.size()) {
+            result.push_back(vec2[j++]);
+        }
+    }
+    return result;
+}
 
-    const size_t total_words = word_index.rows.size() + word_index.cols.size();
+void run(
+    const std::string& name,
+    Board b,
+    const Board::WordIndicies& word_index,
+    const Lookup& lookup,
+    std::atomic<bool>& should_print) {
 
-    std::uniform_int_distribution<> start_index_dist(0, 1000);
-    std::vector<const std::vector<WordIndex>*> to_visit;
-    for (const auto& [_, e] : word_index.rows) to_visit.push_back(&e);
-    for (const auto& [_, e] : word_index.cols) to_visit.push_back(&e);
-    std::shuffle(to_visit.begin(), to_visit.end(), gen);
-
+    std::vector<const std::vector<WordIndex>*> to_visit = alternating_shuffle(word_index);
     DfsHelper dfs_helper(b, to_visit);
 
     size_t boards_checked = 0;
-    using Timer = std::chrono::high_resolution_clock;
-    const Timer::time_point start = Timer::now();
     Timer::time_point previous = start;
 
+    size_t start_index = start_index_dist(gen);
     while (auto current = dfs_helper.pop()) {
         boards_checked++;
 
-        const Timer::time_point now = Timer::now();
-        if (now - previous > std::chrono::seconds(5)) {
-            std::cout << std::format("Tested {} boards at {:.2f}/ms\n", boards_checked,
-                boards_checked / std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(now - start).count());
-            previous = now;
+        if (boards_checked % 100000 == 0) {
+            bool expected = true;
+            if (should_print.compare_exchange_weak(expected, false)) {
+                auto now = Timer::now();
+                std::cout << name << " =======\n";
+                std::cout << std::format("Tested {} words at {:.2f}/ms\n", boards_checked,
+                    boards_checked / std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(now - start).count());
+                previous = now;
+
+                std::cout << "\n" << current->to_string() << "\n\n";
+            }
         }
 
         const std::vector<WordIndex>* indicies = dfs_helper.indicies(*current);
@@ -304,7 +346,7 @@ int main() {
         if (indicies == nullptr) {
             std::cout << "\nDONE\n";
             std::cout << dfs_helper.board(*current).to_string() << "\n";
-            std::filesystem::path path = std::format("/tmp/crossword_{}x{}_{}.ipuz", DIM, DIM, boards_checked);
+            std::filesystem::path path = std::format("/tmp/crossword_{}x{}_{}_{}.ipuz", DIM, DIM, boards_checked, name);
             write_ipuz(dfs_helper.board(*current), word_index, path);
             std::cout << "Wrote data to " << path.string() << "\n\n";
             dfs_helper.pop();
@@ -313,9 +355,9 @@ int main() {
 
         const auto positions = dfs_helper.board(*current).get_characters_at(*indicies);
         const auto& candidates = lookup.words_with_characters_at(positions, indicies->size());
-        size_t start_index = start_index_dist(gen);
+        size_t this_start_index = start_index++;
         for (size_t i = 0; i < candidates.size(); ++i) {
-            const size_t index = candidates[(start_index + i) % candidates.size()];
+            const size_t index = candidates[(this_start_index + i) % candidates.size()];
             if (dfs_helper.used_word(*current, index)) {
                 continue;
             }
@@ -333,6 +375,56 @@ int main() {
                 dfs_helper.push(*current, new_board, index);
             }
         }
+    }
+    std::cout << name << " is done!\n";
+}
+
+int main() {
+    Lookup lookup("/Users/mattlangford/Downloads/google-10000-english-usa.txt");
+
+    Board b;
+    b.block(0, 5);
+    b.block(1, 5);
+
+    b.block(4, 0);
+    b.block(4, 8);
+
+    b.block(7, 3);
+    b.block(8, 3);
+
+    b.block(3, 3);
+    b.block(3, 4);
+    b.block(4, 4);
+    b.block(5, 4);
+    b.block(5, 5);
+
+    const auto word_index = b.generate_word_index();
+
+    start = Timer::now();
+
+    std::atomic<bool> should_print = false;
+    std::vector<std::thread> threads;
+    std::vector<bool> done;
+
+    for (size_t thread = 0; thread < NUM_THREADS; ++thread) {
+        done.push_back(false);
+        std::string name = "thread" + std::to_string(thread);
+        std::cout << "Spawning " << name << "\n";
+        threads.push_back(std::thread([&, name](){
+            run(name, b, word_index, lookup, should_print);
+            done[thread] = true;
+        }));
+    }
+
+    std::cout << b.to_string() << "\n";
+
+    while (std::all_of(done.begin(), done.end(), [](bool b){ return b; })) {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        should_print = true;
+    }
+
+    for (auto& t : threads) {
+        if (t.joinable()) t.join();
     }
 
     return 0;
