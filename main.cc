@@ -40,7 +40,7 @@ public:
         for (auto& c : board_) if (c != BLOCKED) c = OPEN;
     }
 
-    std::string read(const std::vector<WordIndex>& index) const {
+    std::string read(const std::vector<Index>& index) const {
         std::string s;
         s.reserve(index.size());
         for (const WordIndex i : index) {
@@ -210,25 +210,20 @@ private:
         uint16_t used_words = 0;
 
         union Contained {
-            const std::vector<WordIndex>* to_visit;
+            const std::vector<Board::Index>* to_visit;
             WordIndex word;
         };
         std::vector<Contained> contained;
 
         std::string to_string() {
             std::string s = board.to_string();
-            s += std::format("\n used words: {}/{} (", used_words, contained.size());
-            for (size_t i = 0; i < used_words; ++i) {
-                if (i != 0) s += " ";
-                s += std::to_string(contained[i].word);
-            }
-            s += ")";
+            s += std::format("\n used words: {}/{}", used_words, contained.size());
             return s;
         }
     };
 
 public:
-    DfsHelper(Board b, const std::vector<const std::vector<WordIndex>*>& to_visit) {
+    DfsHelper(Board b, const std::vector<const std::vector<Board::Index>*>& to_visit) {
         Dfs d;
         d.board = b;
         for (const auto& w : to_visit) {
@@ -239,7 +234,7 @@ public:
 
     bool done() const { return data_.empty(); }
 
-    const std::vector<WordIndex>* indicies(const Dfs& current) const {
+    const std::vector<Board::Index>* indicies(const Dfs& current) const {
         if (current.used_words >= current.contained.size()) return nullptr;
         return current.contained[current.used_words].to_visit;
     }
@@ -277,18 +272,18 @@ static std::uniform_int_distribution<> start_index_dist(0, 1000);
 using Timer = std::chrono::high_resolution_clock;
 static Timer::time_point start;
 
-std::vector<const std::vector<WordIndex>*> alternating_shuffle(const Board::WordIndicies& word_index) {
-    std::vector<const std::vector<WordIndex>*> rows;
+std::vector<const std::vector<Board::Index>*> alternating_shuffle(const Board::WordIndicies& word_index) {
+    std::vector<const std::vector<Board::Index>*> rows;
     rows.reserve(word_index.rows.size());
     for (const auto& [_, e] : word_index.rows) rows.push_back(&e);
-    std::vector<const std::vector<WordIndex>*> cols;
+    std::vector<const std::vector<Board::Index>*> cols;
     cols.reserve(word_index.cols.size());
     for (const auto& [_, e] : word_index.cols) cols.push_back(&e);
 
     std::shuffle(rows.begin(), rows.end(), gen);
     std::shuffle(cols.begin(), cols.end(), gen);
 
-    std::vector<const std::vector<WordIndex>*> result;
+    std::vector<const std::vector<Board::Index>*> result;
     result.reserve(rows.size() + cols.size());
     std::bernoulli_distribution dist(0.5);
     bool rows_first = dist(gen);
@@ -314,7 +309,7 @@ void run(
     const Lookup& lookup,
     std::atomic<bool>& should_print) {
 
-    std::vector<const std::vector<WordIndex>*> to_visit = alternating_shuffle(word_index);
+    std::vector<const std::vector<Board::Index>*> to_visit = alternating_shuffle(word_index);
     DfsHelper dfs_helper(b, to_visit);
 
     size_t boards_checked = 0;
@@ -337,7 +332,7 @@ void run(
             }
         }
 
-        const std::vector<WordIndex>* indicies = dfs_helper.indicies(*current);
+        const std::vector<Board::Index>* indicies = dfs_helper.indicies(*current);
 
         // std::cout << "\n";
         // std::cout << dfs_helper.board(*current).to_string() << "\n";
@@ -364,7 +359,9 @@ void run(
 
             const std::string& candidate = lookup.word(index);
             Board new_board = dfs_helper.board(*current);
-            if (indicies->size() != candidate.size()) throw std::runtime_error("Invalid candidate length");
+            if (indicies->size() != candidate.size()) {
+                throw std::runtime_error(std::format("Invalid candidate length {} != {}", indicies->size(), candidate));
+            }
             for (size_t j = 0; j < indicies->size(); ++j) {
                 new_board.set_index((*indicies)[j], candidate[j]);
             }
@@ -380,7 +377,7 @@ void run(
 }
 
 int main() {
-    Lookup lookup("/Users/mattlangford/Downloads/google-10000-english-usa.txt");
+    Lookup lookup("/Users/mattlangford/Downloads/words_alpha.txt");
 
     Board b;
     b.block(0, 5);
@@ -418,7 +415,7 @@ int main() {
 
     std::cout << b.to_string() << "\n";
 
-    while (std::all_of(done.begin(), done.end(), [](bool b){ return b; })) {
+    while (!std::all_of(done.begin(), done.end(), [](bool b){ return b; })) {
         std::this_thread::sleep_for(std::chrono::seconds(5));
         should_print = true;
     }

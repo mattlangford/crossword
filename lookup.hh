@@ -83,14 +83,13 @@ private:
     static size_t to_index(char c) { return std::tolower(c) - 'a'; }
 
     void add_to_cache(const std::string& word, WordIndex index) {
+        words_by_length_[word.size()].push_back(index);
+
         struct Bfs {
             size_t level = 0;
             LookupQuery query;
         };
         auto& cache = cache_[word.size()];
-
-        words_by_length_[word.size()].push_back(index);
-
         std::queue<Bfs> bfs;
         bfs.push({0, {}});
         while (!bfs.empty()) {
