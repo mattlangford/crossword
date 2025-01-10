@@ -106,19 +106,12 @@ public:
         return result;
     }
 
-    std::string word(const std::vector<Index>& indicies) const {
-        std::string s;
-        for (const Index& i : indicies) s += board_.at(i);
-        return s;
-    }
-
-    FlatVector<std::pair<WordIndex, char>, SIZE> get_characters_at(const std::vector<WordIndex>& indicies) const {
+    FlatVector<std::pair<WordIndex, char>, SIZE> get_characters_at(const std::vector<Index>& indicies) const {
         FlatVector<std::pair<WordIndex, char>, SIZE> result;
-        std::string w = word(indicies);
-        for (WordIndex i = 0; i < w.size(); ++i) {
-            char c = w[i];
-            if (c == BLOCKED) throw std::runtime_error("Found blocked!");
+        for (WordIndex i = 0; i < indicies.size(); ++i) {
+            char c = board_[indicies[i]];
             if (c != OPEN) {
+                if (c == BLOCKED) throw std::runtime_error("Found blocked!");
                 result.push_back(std::make_pair(i, c));
             }
         }
@@ -203,6 +196,66 @@ void write_ipuz(const Board& final_board, const Board::WordIndicies& index, cons
     file.close();
 }
 
+class DfsHelper {
+private:
+    struct Dfs {
+        Board board;
+
+        uint16_t used_words = 0;
+        uint16_t visited = 0;
+
+        union Contained {
+            const std::vector<WordIndex>* to_visit;
+            WordIndex word;
+        };
+        std::vector<Contained> contained;
+    };
+public:
+    DfsHelper(Board b, const std::vector<const std::vector<WordIndex>*>& to_visit) {
+        Dfs d;
+        d.board = b;
+        for (const auto& w : to_visit) {
+            d.contained.push_back({.to_visit=w});
+        }
+        data_.push(std::move(d));
+    }
+
+    bool done() const { return data_.empty(); }
+
+    const std::vector<WordIndex>* indicies(const Dfs& current) const {
+        if (current.visited >= current.contained.size()) return nullptr;
+        return current.contained[current.visited].to_visit;
+    }
+
+    bool used_word(const Dfs& current, size_t candidate) const {
+        for (uint16_t i = 0; i < current.used_words; ++i) {
+            if (current.contained[i].word == candidate) return true;
+        }
+        return false;
+    }
+
+    const Board& board(const Dfs& current) const {
+        return current.board;
+    }
+
+    void push(Dfs current, Board new_board, size_t index) {
+        current.board = std::move(new_board);
+        current.contained[current.used_words++].word = index;
+        current.visited++;
+        data_.push(std::move(current));
+    }
+
+    std::optional<Dfs> pop() {
+        if (data_.empty()) return std::nullopt;
+        Dfs next = std::move(data_.top());
+        data_.pop();
+        return next;
+    }
+
+private:
+    std::stack<Dfs> data_;
+};
+
 static std::mt19937 gen(42);
 
 int main() {
@@ -211,36 +264,28 @@ int main() {
     Board b;
     b.block(0, 0);
     b.block(4, 4);
+    // b.block(0, 5);
+    // b.block(5, 0);
 
     std::cout << b.to_string() << "\n";
     const auto word_index = b.generate_word_index();
 
     const size_t total_words = word_index.rows.size() + word_index.cols.size();
 
+    std::uniform_int_distribution<> start_index_dist(0, 1000);
     std::vector<const std::vector<WordIndex>*> to_visit;
     for (const auto& [_, e] : word_index.rows) to_visit.push_back(&e);
     for (const auto& [_, e] : word_index.cols) to_visit.push_back(&e);
     std::shuffle(to_visit.begin(), to_visit.end(), gen);
 
-    struct Dfs {
-        Board board;
-        std::vector<const std::vector<WordIndex>*> to_visit;
-        std::vector<size_t> used;
-    };
-
-    std::uniform_int_distribution<> start_index_dist(0, 1000);
+    DfsHelper dfs_helper(b, to_visit);
 
     size_t boards_checked = 0;
     using Timer = std::chrono::high_resolution_clock;
     const Timer::time_point start = Timer::now();
     Timer::time_point previous = start;
 
-    std::stack<Dfs> dfs;
-    size_t size = to_visit.size();
-    std::vector<size_t> used;
-    used.reserve(to_visit.size());
-    dfs.push(Dfs{b, std::move(to_visit), std::move(used)});
-    while (!dfs.empty()) {
+    while (auto current = dfs_helper.pop()) {
         boards_checked++;
 
         const Timer::time_point now = Timer::now();
@@ -250,55 +295,43 @@ int main() {
             previous = now;
         }
 
-        auto [board, to_visit, used] = std::move(dfs.top());
-        dfs.pop();
+        const std::vector<WordIndex>* indicies = dfs_helper.indicies(*current);
 
         // std::cout << "\n";
-        // std::cout << board.to_string() << "\n";
+        // std::cout << dfs_helper.board(*current).to_string() << "\n";
         // std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-        if (to_visit.empty()) {
+        if (indicies == nullptr) {
             std::cout << "\nDONE\n";
-            std::cout << board.to_string() << "\n";
+            std::cout << dfs_helper.board(*current).to_string() << "\n";
             std::filesystem::path path = std::format("/tmp/crossword_{}x{}_{}.ipuz", DIM, DIM, boards_checked);
-            write_ipuz(board, word_index, path);
+            write_ipuz(dfs_helper.board(*current), word_index, path);
             std::cout << "Wrote data to " << path.string() << "\n\n";
+            dfs_helper.pop();
             continue;
         }
 
-        const std::vector<WordIndex>& indicies = *to_visit.back();
-
-        // Don't worry about single characters
-        if (indicies.size() == 1) {
-            auto next_to_visit = to_visit;
-            next_to_visit.pop_back();
-            dfs.push({std::move(board), std::move(next_to_visit), std::move(used)});
-            continue;
-        }
-
-        const auto positions = board.get_characters_at(indicies);
-        const auto& candidates = lookup.words_with_characters_at(positions, indicies.size());
+        const auto positions = dfs_helper.board(*current).get_characters_at(*indicies);
+        const auto& candidates = lookup.words_with_characters_at(positions, indicies->size());
         size_t start_index = start_index_dist(gen);
         for (size_t i = 0; i < candidates.size(); ++i) {
             const size_t index = candidates[(start_index + i) % candidates.size()];
-            if (std::find(used.begin(), used.end(), index) != used.end()) {
+            if (dfs_helper.used_word(*current, index)) {
                 continue;
             }
 
-            auto next_to_visit = to_visit;
-            next_to_visit.pop_back();
-
             const std::string& candidate = lookup.word(index);
-            auto new_used = used;
-            new_used.reserve(size);
-            new_used.push_back(index);
-
-            Board new_board = board;
-            if (indicies.size() != candidate.size()) throw std::runtime_error("Invalid candidate length");
-            for (size_t j = 0; j < indicies.size(); ++j) {
-                new_board.set_index(indicies[j], candidate[j]);
+            Board new_board = dfs_helper.board(*current);
+            if (indicies->size() != candidate.size()) throw std::runtime_error("Invalid candidate length");
+            for (size_t j = 0; j < indicies->size(); ++j) {
+                new_board.set_index((*indicies)[j], candidate[j]);
             }
-            dfs.push({std::move(new_board), std::move(next_to_visit), std::move(new_used)});
+
+            if (i == candidates.size() - 1) {
+                dfs_helper.push(std::move(*current), new_board, index);
+            } else {
+                dfs_helper.push(*current, new_board, index);
+            }
         }
     }
 
